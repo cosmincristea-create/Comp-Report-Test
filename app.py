@@ -87,6 +87,46 @@ def normalize_event_columns(df):
     if renamed:
         df = df.rename(columns=renamed)
 
+    # Check if we need to parse 'positions' column (Wyscout JSON format)
+    # Check both 'positions' and potential aliases like 'pos'
+    pos_col = None
+    if 'positions' in df.columns:
+        pos_col = 'positions'
+    elif 'pos' in df.columns:
+        pos_col = 'pos'
+
+    if 'x' not in df.columns and pos_col:
+        import ast
+
+        def parse_pos(row):
+            try:
+                pos_data = row
+                if isinstance(pos_data, str):
+                    # Handle typical CSV issues where JSON might be malformed or doubled quotes
+                    pos_data = pos_data.replace('""', '"')
+                    pos_data = ast.literal_eval(pos_data)
+
+                if isinstance(pos_data, list) and len(pos_data) > 0:
+                    start = pos_data[0]
+                    x = start.get('x')
+                    y = start.get('y')
+                    end_x = x
+                    end_y = y
+                    if len(pos_data) > 1:
+                        end = pos_data[1]
+                        end_x = end.get('x')
+                        end_y = end.get('y')
+                    return pd.Series([x, y, end_x, end_y])
+            except:
+                pass
+            return pd.Series([None, None, None, None])
+
+        # Apply parsing
+        # This can be slow, but necessary if data is in this format
+        cols = df[pos_col].apply(parse_pos)
+        cols.columns = ['x', 'y', 'end_x', 'end_y']
+        df = pd.concat([df, cols], axis=1)
+
     return df
 
 def load_role_definitions():
