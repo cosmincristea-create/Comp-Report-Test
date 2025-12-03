@@ -68,7 +68,11 @@ def normalize_event_columns(df):
     col_map = {
         'teamId': ['team.id', 'team_id', 'team', 'teams_wyId'],
         'playerId': ['player.id', 'player_id', 'player', 'player_wyId'],
-        'matchId': ['match.id', 'match_id', 'match']
+        'matchId': ['match.id', 'match_id', 'match'],
+        'x': ['location.x', 'pos_x', 'start_x', 'x_start', 'positions_0_x'],
+        'y': ['location.y', 'pos_y', 'start_y', 'y_start', 'positions_0_y'],
+        'end_x': ['pass.endLocation.x', 'end_location.x', 'end_x', 'positions_1_x'],
+        'end_y': ['pass.endLocation.y', 'end_location.y', 'end_y', 'positions_1_y']
     }
 
     renamed = {}
