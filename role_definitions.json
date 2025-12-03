@@ -1,0 +1,262 @@
+{
+  "Centre Back": {
+    "Ball Player": {
+      "position_codes": ["rcb", "lcb", "rcb3", "lcb3", "cb"],
+      "metrics": {
+        "average_defensiveDuels": 5.0,
+        "percent_defensiveDuelsWon": 7.0,
+        "average_interceptions": 4.0,
+        "average_successfulDefensiveAction": 4.0,
+        "average_aerialDuels": 3.0,
+        "percent_aerialDuelsWon": 7.0,
+        "average_passes": 10.0,
+        "percent_passesAccurate": 11.25,
+        "average_receivedPass": 3.75,
+        "average_progressivePasses": 6.0,
+        "percent_progressivePassesAccurate": 9.0,
+        "percent_longPassesAccurate": 3.0,
+        "percent_passesToFinalThirdAccurate": 2.0,
+        "average_progressiveRun": 12.5,
+        "average_dribbles": 5.0,
+        "percent_successfulDribbles": 7.5
+      },
+      "archetypes": ["Marquinhos", "Dayot Upamecano"]
+    },
+    "Central Defender": {
+      "position_codes": ["rcb", "lcb", "rcb3", "lcb3", "cb"],
+      "metrics": {
+        "percent_defensiveDuelsWon": 10,
+        "average_defensiveDuels": 8,
+        "percent_aerialDuelsWon": 10,
+        "average_aerialDuels": 9,
+        "average_interceptions": 8,
+        "average_clearances": 9,
+        "average_shotsBlocked": 7,
+        "percent_passesAccurate": 6,
+        "average_passes": 5,
+        "average_forwardPasses": 3,
+        "percent_longPassesAccurate": 2
+      },
+      "archetypes": ["Ruben Dias", "Marcos Senesi"]
+    },
+    "Wide Center-Back": {
+      "position_codes": ["rcb", "lcb", "rcb3", "lcb3", "cb"],
+      "metrics": {
+        "average_progressiveRun": 10,
+        "average_progressivePasses": 9,
+        "percent_defensiveDuelsWon": 8,
+        "average_forwardPasses": 8,
+        "percent_aerialDuelsWon": 8,
+        "percent_progressivePassesAccurate": 7,
+        "average_interceptions": 7,
+        "average_aerialDuels": 7,
+        "average_accelerations": 6,
+        "average_clearances": 6,
+        "average_receivedPass": 5
+      },
+      "archetypes": ["Ben White", "Jules Koundé"]
+    }
+  },
+  "Fullback": {
+    "Fullback/Wingback": {
+      "position_codes": ["rb", "lb", "rwb", "lwb", "rb5", "lb5"],
+      "metrics": {
+        "average_progressiveRun": 9,
+        "average_crosses": 9,
+        "average_successfulDribbles": 8,
+        "average_xgAssist": 8,
+        "percent_successfulCrosses": 8,
+        "percent_successfulDribbles": 7,
+        "average_accelerations": 7,
+        "average_passesToFinalThird": 7,
+        "percent_defensiveDuelsWon": 7,
+        "average_defensiveDuels": 6,
+        "average_keyPasses": 6,
+        "average_aerialDuels": 6,
+        "percent_aerialDuelsWon": 6,
+        "average_interceptions": 5
+      },
+      "archetypes": ["Jeremie Frimpong", "Achraf Hakimi"]
+    }
+  },
+  "Centre Midfielder": {
+    "Defensive Midfielder": {
+      "position_codes": ["dmf", "ldmf", "rdmf"],
+      "metrics": {
+        "average_interceptions": 10,
+        "percent_defensiveDuelsWon": 9,
+        "average_defensiveDuels": 8,
+        "average_ballRecoveries": 8,
+        "average_counterpressingRecoveries": 8,
+        "percent_pressingDuelsWon": 7,
+        "average_pressingDuels": 7,
+        "percent_aerialDuelsWon": 7,
+        "average_progressivePasses": 7,
+        "average_passes": 7,
+        "percent_passesAccurate": 7,
+        "average_fouls": -3,
+        "average_ownHalfLosses": -5
+      },
+      "archetypes": ["Rodri", "Declan Rice"]
+    },
+    "Box-to-Box Midfielder": {
+      "position_codes": ["lcmf", "rcmf", "lcmf3", "rcmf3"],
+      "metrics": {
+        "average_progressiveRun": 9,
+        "average_progressivePasses": 9,
+        "average_successfulDefensiveAction": 8,
+        "average_successfulAttackingActions": 8,
+        "average_interceptions": 7,
+        "average_keyPasses": 7,
+        "average_touchInBox": 7,
+        "average_xgShot": 6,
+        "average_xgAssist": 6,
+        "percent_defensiveDuelsWon": 6,
+        "average_passes": 6,
+        "percent_passesAccurate": 6,
+        "percent_aerialDuelsWon": 5,
+        "average_smartPasses": 5
+      },
+      "archetypes": ["Jude Bellingham", "Federico Valverde"]
+    },
+    "Advanced Playmaker": {
+      "position_codes": ["amf", "lamf", "ramf"],
+      "metrics": {
+        "average_keyPasses": 10,
+        "average_smartPasses": 10,
+        "average_xgAssist": 9,
+        "average_passesToFinalThird": 9,
+        "average_xgShot": 8,
+        "average_touchInBox": 8,
+        "percent_passesToFinalThirdAccurate": 7,
+        "average_assists": 7,
+        "average_passes": 7,
+        "percent_passesAccurate": 7,
+        "percent_successfulDribbles": 6,
+        "average_dribbles": 5,
+        "average_receivedPass": 5,
+        "average_successfulDefensiveAction": 2,
+        "average_interceptions": 1
+      },
+      "archetypes": ["Martin Ødegaard", "Kevin De Bruyne"]
+    },
+    "Hybrid 8/10 (Mezzala)": {
+      "position_codes": ["lcmf", "rcmf", "lcmf3", "rcmf3", "amf", "lamf", "ramf"],
+      "metrics": {
+        "average_progressiveRun": 10,
+        "average_keyPasses": 9,
+        "average_xgShot": 9,
+        "average_touchInBox": 9,
+        "average_xgAssist": 8,
+        "average_dribbles": 8,
+        "percent_successfulDribbles": 7,
+        "average_passesToFinalThird": 7,
+        "percent_passesToFinalThirdAccurate": 7,
+        "average_shots": 7,
+        "average_passes": 6,
+        "percent_passesAccurate": 6,
+        "average_smartPasses": 6,
+        "average_interceptions": 5,
+        "percent_defensiveDuelsWon": 4
+      },
+      "archetypes": ["Bernardo Silva", "Nicolò Barella"]
+    }
+  },
+  "Attacker": {
+    "Winger/Inside Forward": {
+      "position_codes": ["rwf", "lw", "lwf", "rw"],
+      "metrics": {
+        "average_successfulDribbles": 10,
+        "average_xgShot": 9,
+        "average_touchInBox": 9,
+        "average_shots": 8,
+        "average_xgAssist": 8,
+        "average_progressiveRun": 8,
+        "average_keyPasses": 7,
+        "average_crosses": 7,
+        "average_passesToFinalThird": 7,
+        "percent_successfulDribbles": 7,
+        "average_accelerations": 6,
+        "percent_successfulCrosses": 5
+      },
+      "archetypes": ["Bukayo Saka", "Kylian Mbappé"]
+    },
+    "Poacher": {
+      "position_codes": ["cf"],
+      "metrics": {
+        "average_xgShot": 10,
+        "average_touchInBox": 10,
+        "average_shots": 9,
+        "percent_goalConversion": 9,
+        "average_goals": 9,
+        "percent_shotsOnTarget": 8,
+        "average_headShots": 7,
+        "average_offensiveDuelsWon": 7,
+        "percent_aerialDuelsWon": 6,
+        "average_linkupPlays": 5,
+        "average_dribbles": 4,
+        "percent_successfulDribbles": 4,
+        "average_xgAssist": 3,
+        "average_shotAssists": 3
+      },
+      "archetypes": ["Erling Haaland", "Victor Osimhen"]
+    },
+    "Pressing Forward": {
+      "position_codes": ["cf", "rwf", "lwf"],
+      "metrics": {
+        "average_pressingDuels": 10,
+        "average_opponentHalfRecoveries": 9,
+        "percent_pressingDuelsWon": 9,
+        "average_counterpressingRecoveries": 9,
+        "average_xgShot": 8,
+        "average_accelerations": 8,
+        "average_touchInBox": 8,
+        "average_shots": 7,
+        "average_goals": 7,
+        "average_successfulDefensiveAction": 7,
+        "average_interceptions": 6,
+        "average_offensiveDuelsWon": 6,
+        "average_xgAssist": 5,
+        "average_headShots": 5,
+        "average_linkupPlays": 5,
+        "average_shotAssists": 5,
+        "average_dribbles": 4,
+        "percent_successfulDribbles": 4
+      },
+      "archetypes": ["Julián Álvarez", "Ousmane Dembele"]
+    }
+  },
+  "Goalkeeper": {
+    "Goalkeeper (Traditional)": {
+      "position_codes": ["gk"],
+      "metrics": {
+        "percent_gkSaves": 10,
+        "average_gkConcededGoals": -10,
+        "percent_gkSuccessfulExits": 8,
+        "percent_gkAerialDuelsWon": 8,
+        "average_gkExits": 7,
+        "average_gkAerialDuels": 7,
+        "average_xgSave": 5,
+        "percent_longPassesAccurate": 3,
+        "average_longPasses": 2
+      },
+      "archetypes": ["Thibaut Courtois", "Jan Oblak"]
+    },
+    "Ball Playing Goalkeeper": {
+      "position_codes": ["gk"],
+      "metrics": {
+        "percent_passesAccurate": 10,
+        "average_passes": 9,
+        "percent_longPassesAccurate": 9,
+        "average_longPasses": 8,
+        "percent_gkSaves": 8,
+        "average_gkConcededGoals": -8,
+        "average_receivedPass": 7,
+        "average_xgSave": 5,
+        "percent_gkSuccessfulExits": 5,
+        "percent_gkAerialDuelsWon": 4
+      },
+      "archetypes": ["Ederson", "Mike Maignan"]
+    }
+  }
+}
