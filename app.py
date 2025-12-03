@@ -63,7 +63,7 @@ def detect_file_type(df):
     return 'unknown'
 
 def load_role_definitions():
-    with open(ROLE_DEFINITIONS_FILE, 'r') as f:
+    with open(ROLE_DEFINITIONS_FILE, 'r', encoding='utf-8') as f:
         return json.load(f)
 
 def map_position_to_family(position_code, role_defs):
