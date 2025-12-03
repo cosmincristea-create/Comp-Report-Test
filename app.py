@@ -62,6 +62,29 @@ def detect_file_type(df):
         return 'stats'
     return 'unknown'
 
+def normalize_event_columns(df):
+    """Standardizes column names for Event Data."""
+    # Map possible variations to standard names
+    col_map = {
+        'teamId': ['team.id', 'team_id', 'team', 'teams_wyId'],
+        'playerId': ['player.id', 'player_id', 'player', 'player_wyId'],
+        'matchId': ['match.id', 'match_id', 'match']
+    }
+
+    renamed = {}
+    for standard, variations in col_map.items():
+        if standard in df.columns:
+            continue
+        for var in variations:
+            if var in df.columns:
+                renamed[var] = standard
+                break
+
+    if renamed:
+        df = df.rename(columns=renamed)
+
+    return df
+
 def load_role_definitions():
     with open(ROLE_DEFINITIONS_FILE, 'r', encoding='utf-8') as f:
         return json.load(f)
@@ -174,11 +197,15 @@ def load_data():
     # Load Events
     if liga_ii_event_file:
         df = load_and_tag(liga_ii_event_file, 'Liga II')
-        if df is not None: data_store['events']['Liga II'] = df
+        if df is not None:
+            df = normalize_event_columns(df)
+            data_store['events']['Liga II'] = df
 
     if superliga_event_file:
         df = load_and_tag(superliga_event_file, 'Superliga')
-        if df is not None: data_store['events']['Superliga'] = df
+        if df is not None:
+            df = normalize_event_columns(df)
+            data_store['events']['Superliga'] = df
 
     # Load Stats (Repo Files)
     # Finding files dynamically or hardcoded
@@ -242,6 +269,7 @@ if uploaded_files:
         if ftype == 'event':
             # Tag as 'Uploaded'
             df['Competition'] = 'Uploaded'
+            df = normalize_event_columns(df)
             # Add to events list (might need a better structure for multi-file)
             data['events'][uploaded_file.name] = df
         elif ftype == 'stats':
