@@ -12,6 +12,8 @@ from sklearn.preprocessing import StandardScaler
 from sklearn.decomposition import PCA
 from sklearn.cluster import KMeans
 from scipy import stats
+import socceraction.spadl.wyscout as wy
+import socceraction.spadl.config as spadlcfg
 
 # Set page config
 st.set_page_config(layout="wide", page_title="Romanian Football Analytics", page_icon="⚽")
@@ -130,6 +132,86 @@ def normalize_event_columns(df):
         df = pd.concat([df, cols], axis=1)
 
     return df
+
+def prepare_for_spadl(df):
+    """Maps normalized columns to socceraction expected snake_case names."""
+    # Socceraction expects: event_id, team_id, player_id, match_id, etc.
+    # Our normalized: teamId, playerId, matchId
+    # Plus original cols.
+
+    mapping = {
+        'teamId': 'team_id',
+        'playerId': 'player_id',
+        'matchId': 'match_id',
+        'subEventName': 'sub_event_name',
+        'eventId': 'event_id',
+        'id': 'event_id' # sometimes id is the event id
+    }
+
+    # Invert mapping if needed? No, we rename current to target.
+    # Check what exists
+    rename_dict = {}
+    for curr, target in mapping.items():
+        if curr in df.columns and target not in df.columns:
+            rename_dict[curr] = target
+
+    if rename_dict:
+        df = df.rename(columns=rename_dict)
+
+    return df
+
+@st.cache_data
+def load_and_process_wyscout(file_path):
+    """
+    Loads Wyscout event CSV, normalizes, and converts to SPADL.
+    Returns a DataFrame of SPADL actions.
+    """
+    if not os.path.exists(file_path):
+        return pd.DataFrame()
+
+    # Load and Normalize
+    df = pd.read_csv(file_path)
+    df = normalize_event_columns(df) # ensures teamId, playerId exist
+    df = prepare_for_spadl(df)       # maps to team_id, player_id
+
+    # Conversion requires looping through matches
+    # Socceraction needs 'home_team_id' for each match to orient coordinates.
+    # We will infer home_team_id (e.g. first team seen or random if unknown)
+
+    spadl_actions_list = []
+
+    if 'match_id' not in df.columns:
+        # Single match file maybe?
+        matches = [0]
+        df['match_id'] = 0
+    else:
+        matches = df['match_id'].unique()
+
+    for m_id in matches:
+        match_events = df[df['match_id'] == m_id].copy()
+        if match_events.empty: continue
+
+        # Infer home_team_id
+        # In Wyscout data, usually there is no explicit 'home' flag in event data alone
+        # We assume the team of the first event is Home, or just pick one.
+        # This affects left-to-right playing direction normalization.
+        teams = match_events['team_id'].unique()
+        home_team = teams[0] if len(teams) > 0 else 0
+
+        try:
+            # Convert
+            actions = wy.convert_to_actions(match_events, home_team_id=home_team)
+            actions['match_id'] = m_id
+            spadl_actions_list.append(actions)
+        except Exception as e:
+            # Fallback or Skip
+            # print(f"Error converting match {m_id}: {e}")
+            pass
+
+    if spadl_actions_list:
+        return pd.concat(spadl_actions_list).reset_index(drop=True)
+    else:
+        return pd.DataFrame()
 
 def load_role_definitions():
     with open(ROLE_DEFINITIONS_FILE, 'r', encoding='utf-8') as f:
@@ -252,25 +334,25 @@ def load_data():
         'stats': {}
     }
 
-    # Helper to load and tag
+    # Load Events using SPADL converter
+    if liga_ii_event_file:
+        df = load_and_process_wyscout(liga_ii_event_file)
+        if not df.empty:
+            df['Competition'] = 'Liga II'
+            data_store['events']['Liga II'] = df
+
+    if superliga_event_file:
+        df = load_and_process_wyscout(superliga_event_file)
+        if not df.empty:
+            df['Competition'] = 'Superliga'
+            data_store['events']['Superliga'] = df
+
+    # Helper to load and tag (for stats files)
     def load_and_tag(path, competition):
         if not path or not os.path.exists(path): return None
         df = pd.read_csv(path)
         df['Competition'] = competition
         return df
-
-    # Load Events
-    if liga_ii_event_file:
-        df = load_and_tag(liga_ii_event_file, 'Liga II')
-        if df is not None:
-            df = normalize_event_columns(df)
-            data_store['events']['Liga II'] = df
-
-    if superliga_event_file:
-        df = load_and_tag(superliga_event_file, 'Superliga')
-        if df is not None:
-            df = normalize_event_columns(df)
-            data_store['events']['Superliga'] = df
 
     # Load Stats (Repo Files)
     # Finding files dynamically or hardcoded
@@ -478,19 +560,27 @@ with tab_player:
                     events_df = data['events'][selected_comp]
                     # Filter by Player ID
                     # Player Stats has 'playerId' (WyId).
+                    # SPADL uses 'player_id'
                     pid = player_stats['playerId']
-                    player_events = events_df[events_df['playerId'] == pid]
+
+                    # Check column names (SPADL vs Raw)
+                    p_col = 'player_id' if 'player_id' in events_df.columns else 'playerId'
+
+                    player_events = events_df[events_df[p_col] == pid]
 
                     if not player_events.empty:
-                         pitch = Pitch(pitch_type='wyscout', line_zorder=2, pitch_color='#222222', line_color='#efefef')
+                         # SPADL Pitch
+                         pitch = Pitch(pitch_type='custom', pitch_length=105, pitch_width=68, line_zorder=2, pitch_color='#222222', line_color='#efefef')
                          fig_h, ax_h = pitch.draw(figsize=(10, 7))
 
-                         # KDE Plot
-                         # Use seaborn or mplsoccer kdeplot
+                         # Coordinates
+                         x_col = 'start_x' if 'start_x' in events_df.columns else 'x'
+                         y_col = 'start_y' if 'start_y' in events_df.columns else 'y'
+
                          # Filter only valid x, y
-                         valid_ev = player_events.dropna(subset=['x', 'y'])
+                         valid_ev = player_events.dropna(subset=[x_col, y_col])
                          if not valid_ev.empty:
-                             pitch.kdeplot(valid_ev.x, valid_ev.y, ax=ax_h, cmap='hot', fill=True, levels=100, alpha=0.6)
+                             pitch.kdeplot(valid_ev[x_col], valid_ev[y_col], ax=ax_h, cmap='hot', fill=True, levels=100, alpha=0.6)
                              st.pyplot(fig_h)
                          else:
                              st.write("No location data for events.")
@@ -699,40 +789,117 @@ with tab_advanced:
             st.warning("No player data.")
 
     with subtab_xt:
-        st.subheader("Expected Threat (xT) - Simplified Grid")
+        st.subheader("Expected Threat (xT) - Karun Singh Grid")
 
-        # Simplified xT Matrix (12x16 grid)
-        # Increasing value towards goal (right side)
-        # Create a gradient matrix
-        xT_rows, xT_cols = 12, 16
-        xT_grid = np.zeros((xT_rows, xT_cols))
+        # Karun Singh's xT Grid (12x16)
+        xT_grid = np.array([
+            [0.00638, 0.0077, 0.00845, 0.00978, 0.01126, 0.01248, 0.01474, 0.01745, 0.02122, 0.02756, 0.03485, 0.03792, 0.03505, 0.02806, 0.02421, 0.01575],
+            [0.0075, 0.00869, 0.00997, 0.01112, 0.01267, 0.01429, 0.01686, 0.01935, 0.02412, 0.0304, 0.04066, 0.04543, 0.04615, 0.0416, 0.03687, 0.02404],
+            [0.00888, 0.00978, 0.01143, 0.01242, 0.01494, 0.01666, 0.02017, 0.02271, 0.02945, 0.03816, 0.05151, 0.0601, 0.0683, 0.06525, 0.05206, 0.03351],
+            [0.0097, 0.01087, 0.01247, 0.0143, 0.01625, 0.01918, 0.02256, 0.02677, 0.03456, 0.04639, 0.06319, 0.0772, 0.09117, 0.10685, 0.09279, 0.05581],
+            [0.01048, 0.01146, 0.01347, 0.01493, 0.01804, 0.02081, 0.02552, 0.03108, 0.0425, 0.05597, 0.0768, 0.10237, 0.12932, 0.16543, 0.15582, 0.09063],
+            [0.01143, 0.01223, 0.01389, 0.01614, 0.0187, 0.02244, 0.02728, 0.03498, 0.04705, 0.06059, 0.08985, 0.11306, 0.16508, 0.2312, 0.26089, 0.16709],
+            [0.01143, 0.01223, 0.01389, 0.01614, 0.0187, 0.02244, 0.02728, 0.03498, 0.04705, 0.06059, 0.08985, 0.11306, 0.16508, 0.2312, 0.26089, 0.16709],
+            [0.01048, 0.01146, 0.01347, 0.01493, 0.01804, 0.02081, 0.02552, 0.03108, 0.0425, 0.05597, 0.0768, 0.10237, 0.12932, 0.16543, 0.15582, 0.09063],
+            [0.0097, 0.01087, 0.01247, 0.0143, 0.01625, 0.01918, 0.02256, 0.02677, 0.03456, 0.04639, 0.06319, 0.0772, 0.09117, 0.10685, 0.09279, 0.05581],
+            [0.00888, 0.00978, 0.01143, 0.01242, 0.01494, 0.01666, 0.02017, 0.02271, 0.02945, 0.03816, 0.05151, 0.0601, 0.0683, 0.06525, 0.05206, 0.03351],
+            [0.0075, 0.00869, 0.00997, 0.01112, 0.01267, 0.01429, 0.01686, 0.01935, 0.02412, 0.0304, 0.04066, 0.04543, 0.04615, 0.0416, 0.03687, 0.02404],
+            [0.00638, 0.0077, 0.00845, 0.00978, 0.01126, 0.01248, 0.01474, 0.01745, 0.02122, 0.02756, 0.03485, 0.03792, 0.03505, 0.02806, 0.02421, 0.01575]
+        ])
 
-        for r in range(xT_rows):
-            for c in range(xT_cols):
-                # Simple logic: closer to center y, closer to end x -> higher value
-                # Normalize x (0-1), y (0-0.5-0)
-                x_val = c / xT_cols
-                y_val = 1 - abs((r - xT_rows/2) / (xT_rows/2))
+        # Helper to apply xT
+        def calculate_xt(row, grid):
+            try:
+                # SPADL coordinates: 105x68
+                # Clip to grid dimensions 16x12
+                # y in SPADL is 0-68 (bottom to top? check standard. socceraction uses standard pitch).
+                # xT grid assumption: Row 0 is top (Left Wing). Row 11 is bottom (Right Wing).
+                # SPADL: (0,0) is bottom-left? Standard SPADL (0,0) is bottom-left (actually typically center or corner depending on provider normalization, but convert_to_actions output is standard SPADL 105x68, (0,0) bottom-left).
+                # Karun Grid: Row 0 top. So we might need to invert Y index.
+                # Let's assume standard mapping first.
 
-                # xT usually low in back, high in half-spaces/zone 14
-                val = (x_val ** 2) * 0.1 + (x_val * y_val * 0.05)
-                xT_grid[r, c] = val
+                start_x_bin = int(np.clip(row['start_x'] / 105 * 16, 0, 15))
+                start_y_bin = int(np.clip(row['start_y'] / 68 * 12, 0, 11))
+                end_x_bin = int(np.clip(row['end_x'] / 105 * 16, 0, 15))
+                end_y_bin = int(np.clip(row['end_y'] / 68 * 12, 0, 11))
+
+                # Invert Y bin if Grid Row 0 is Top and SPADL 0 is Bottom
+                # SPADL: y=68 is Top.
+                # Grid: Row 0 is Top.
+                # So if y=68, we want Row 0.
+                start_y_bin = 11 - start_y_bin
+                end_y_bin = 11 - end_y_bin
+
+                start_val = grid[start_y_bin][start_x_bin]
+                end_val = grid[end_y_bin][end_x_bin]
+
+                return end_val - start_val
+            except:
+                return 0.0
 
         # Visualize Grid
         st.write("Visualizing High Threat Zones")
-        pitch = Pitch(pitch_type='wyscout', line_zorder=2, pitch_color='#222222', line_color='#efefef')
+        # Use custom pitch for 105x68
+        pitch = Pitch(pitch_type='custom', pitch_length=105, pitch_width=68, line_zorder=2, pitch_color='#222222', line_color='#efefef')
         fig_xt, ax_xt = pitch.draw(figsize=(10, 7))
 
         # Heatmap of the Grid
-        # Pitch dimensions: 105x68 usually. Wyscout is 100x100
-        # mplsoccer handles binning if we used bin_statistic, but here we have a raw grid.
-        # We can plot it using imshow if we map it to extent.
+        # Flip vertically for display to match Pitch (0 at bottom) if using origin='lower'
+        # But our grid has Row 0 at top. imshow default is origin='upper'.
+        # So it should match if we just plot it.
 
-        ax_xt.imshow(xT_grid, extent=(0, 100, 0, 100), cmap='magma', alpha=0.6, origin='lower')
+        ax_xt.imshow(xT_grid, extent=(0, 105, 0, 68), cmap='magma', alpha=0.6, origin='upper')
 
         st.pyplot(fig_xt)
 
-        st.info("This is a simplified gradient-based xT model. Real xT requires training on large datasets.")
+        if 'stats' in data and 'players' in data['stats']:
+            player_df = data['stats']['players']
+            families_xt = sorted(player_df['PositionFamily'].unique())
+            sel_fam_xt = st.selectbox("Select Position Family for xT Analysis", families_xt, key='xt_fam')
+
+            # Need to link players to Event Data to calculate their Total xT
+            # This is the Hybrid part.
+            # We iterate through all event data loaded
+            if 'events' in data:
+                xt_records = []
+                for comp, df_events in data['events'].items():
+                    # Filter for passes/carries (successful)
+                    # SPADL: type_name 'pass', 'dribble', 'cross'?
+                    # Only successful moves usually.
+                    moves = df_events[
+                        (df_events['type_name'].isin(['pass', 'dribble', 'cross'])) &
+                        (df_events['result_name'] == 'success')
+                    ].copy()
+
+                    if not moves.empty:
+                        # Calculate xT
+                        moves['xT'] = moves.apply(lambda r: calculate_xt(r, xT_grid), axis=1)
+                        # Group by player
+                        grouped = moves.groupby('player_id')['xT'].sum().reset_index()
+                        xt_records.append(grouped)
+
+                if xt_records:
+                    total_xt = pd.concat(xt_records).groupby('player_id')['xT'].sum().reset_index()
+
+                    # Merge with selected family players
+                    # Map player_id to playerId
+                    fam_players = player_df[player_df['PositionFamily'] == sel_fam_xt].copy()
+                    merged = fam_players.merge(total_xt, left_on='playerId', right_on='player_id', how='left')
+                    merged['xT'] = merged['xT'].fillna(0)
+
+                    # Normalize per 90
+                    # Check if 'per90_total_minutesOnField' exists? No, minutes is total_minutesOnField.
+                    # We normalized stats before. We can do (xT / minutes) * 90
+                    if 'total_minutesOnField' in merged.columns:
+                        merged['xT_per_90'] = (merged['xT'] / merged['total_minutesOnField']) * 90
+                    else:
+                        merged['xT_per_90'] = 0
+
+                    # Show Top Players
+                    st.write("Top Generators (xT per 90)")
+                    st.dataframe(merged[['player_shortName', 'team_name', 'xT_per_90']].sort_values('xT_per_90', ascending=False).head(10))
+            else:
+                st.write("No event data available for xT calculation.")
 
 # --- Tab A: Team Analysis ---
 with tab_team:
@@ -754,37 +921,40 @@ with tab_team:
         team_a = st.selectbox("Select Team A", available_teams)
         team_b = st.selectbox("Select Team B (Comparison)", ["None"] + list(available_teams))
 
-        # Match Selector (Requires Event Data)
+        # Match Selector (Requires Event Data - SPADL)
         match_options = {}
         if selected_comp in data['events']:
             events_df = data['events'][selected_comp]
             # Filter for Team A events
+            # SPADL uses 'team_id' and 'match_id'
             if not team_df.empty:
                 team_info = team_df[(team_df['team_name'] == team_a) & (team_df['Competition'] == selected_comp)]
                 if not team_info.empty:
                     team_a_id = team_info.iloc[0]['teamId']
 
                     # Filter events for this team to get match IDs
-                    team_matches = events_df[events_df['teamId'] == team_a_id]['matchId'].unique()
+                    # SPADL column: team_id, match_id
+                    if 'team_id' in events_df.columns:
+                        team_matches = events_df[events_df['team_id'] == team_a_id]['match_id'].unique()
 
-                    # For each match, find the opponent
-                    for m_id in team_matches:
-                        # Get all events for this match
-                        m_events = events_df[events_df['matchId'] == m_id]
-                        # Find unique teams in this match
-                        teams_in_match = m_events['teamId'].unique()
-                        # Opponent is the one that is NOT team_a_id
-                        opp_id = next((t for t in teams_in_match if t != team_a_id), None)
+                        # For each match, find the opponent
+                        for m_id in team_matches:
+                            # Get all events for this match
+                            m_events = events_df[events_df['match_id'] == m_id]
+                            # Find unique teams in this match
+                            teams_in_match = m_events['team_id'].unique()
+                            # Opponent is the one that is NOT team_a_id
+                            opp_id = next((t for t in teams_in_match if t != team_a_id), None)
 
-                        label = f"Match {m_id}"
-                        if opp_id:
-                            # Find opponent name
-                            opp_row = team_df[team_df['teamId'] == opp_id]
-                            if not opp_row.empty:
-                                opp_name = opp_row.iloc[0]['team_name']
-                                label = f"vs {opp_name} ({m_id})"
+                            label = f"Match {m_id}"
+                            if opp_id:
+                                # Find opponent name
+                                opp_row = team_df[team_df['teamId'] == opp_id]
+                                if not opp_row.empty:
+                                    opp_name = opp_row.iloc[0]['team_name']
+                                    label = f"vs {opp_name} ({m_id})"
 
-                        match_options[label] = m_id
+                            match_options[label] = m_id
 
         selected_match_label = st.selectbox("Select Match", ["All"] + list(match_options.keys()))
         selected_match = match_options[selected_match_label] if selected_match_label != "All" else "All"
@@ -857,65 +1027,46 @@ with tab_team:
             team_info = team_df[(team_df['team_name'] == team_a) & (team_df['Competition'] == selected_comp)]
             if not team_info.empty:
                 team_a_id = team_info.iloc[0]['teamId']
-                match_events = events_df[(events_df['matchId'] == selected_match) & (events_df['teamId'] == team_a_id)]
+
+                # SPADL: Filter match_id and team_id
+                match_events = events_df[(events_df['match_id'] == selected_match) & (events_df['team_id'] == team_a_id)]
 
                 # 1. Pass Map
                 st.markdown("### Pass Map")
-                # Filter passes
-                passes = match_events[match_events['subEventName'].str.contains('pass', case=False, na=False)]
+                # SPADL Pass Filter
+                passes = match_events[match_events['type_name'] == 'pass'].copy()
 
-                # Setup Pitch
-                pitch = Pitch(pitch_type='wyscout', pitch_color='#222222', line_color='#c7d5cc')
+                # Setup Pitch (Custom 105x68 for SPADL)
+                pitch = Pitch(pitch_type='custom', pitch_length=105, pitch_width=68, pitch_color='#222222', line_color='#c7d5cc')
                 fig, ax = pitch.draw(figsize=(10, 7))
 
-                # Draw Successful
-                # Need column for success/accuracy. Wyscout tags? or 'tags' column?
-                # Tags: {id: 1801} is accurate pass.
-                # Let's check columns. Usually there's tags.
-                # If we can't parse tags easily here, we might just plot all arrows.
-                # Assuming 'tags' column exists and is a list of dicts or string.
-                # Simplification: Plot all passes for now, color by 'id' if possible or just blue.
+                # SPADL Success
+                succ_passes = passes[passes['result_name'] == 'success']
+                unsucc_passes = passes[passes['result_name'] != 'success']
 
-                # Attempt to find success tag (1801)
-                # Wyscout CSV usually has a 'tags' column which is a string like "[{'id': 1801}]"
-
-                passes['is_successful'] = passes['tags'].astype(str).str.contains('1801')
-
-                succ_passes = passes[passes['is_successful']]
-                unsucc_passes = passes[~passes['is_successful']]
-
-                pitch.arrows(succ_passes.x, succ_passes.y, succ_passes.end_x, succ_passes.end_y, ax=ax, color='green', width=2, headwidth=3, alpha=0.6, label='Successful')
-                pitch.arrows(unsucc_passes.x, unsucc_passes.y, unsucc_passes.end_x, unsucc_passes.end_y, ax=ax, color='red', width=2, headwidth=3, alpha=0.6, label='Unsuccessful')
+                pitch.arrows(succ_passes.start_x, succ_passes.start_y, succ_passes.end_x, succ_passes.end_y, ax=ax, color='green', width=2, headwidth=3, alpha=0.6, label='Successful')
+                pitch.arrows(unsucc_passes.start_x, unsucc_passes.start_y, unsucc_passes.end_x, unsucc_passes.end_y, ax=ax, color='red', width=2, headwidth=3, alpha=0.6, label='Unsuccessful')
 
                 ax.legend(facecolor='#222222', edgecolor='None', labelcolor='white')
                 st.pyplot(fig)
 
                 # 2. Shot Map
                 st.markdown("### Shot Map")
-                shots = match_events[match_events['subEventName'] == 'Shot']
-                goals = shots[shots['tags'].astype(str).str.contains('101')] # Tag 101 is Goal
+                # SPADL Shot Filter
+                shots = match_events[match_events['type_name'] == 'shot'].copy()
+                goals = shots[shots['result_name'] == 'success']
 
                 fig2, ax2 = pitch.draw(figsize=(10, 7))
 
-                # Check for xG column ('xgShot' in some Wyscout versions, or need to calculate/mock)
-                # If available, use it for size.
-                # The prompt mentions "Plot shot locations with size determined by xG (if available)".
-                # Wyscout Event CSV standard V2 usually doesn't have xG directly unless enriched.
-                # However, the repo *Stats* file has total_xgShot.
-                # If the EVENT file has xG, we use it. If not, we default size.
-                # Let's check columns defensively.
-
-                if 'xg' in shots.columns:
-                    sizes = shots['xg'] * 500
-                elif 'xgShot' in shots.columns:
-                     sizes = shots['xgShot'] * 500
-                else:
-                    sizes = 100 # Default size
+                # xG Size logic
+                # socceraction xG model is not running yet, so we don't have xG column in SPADL output unless we added it.
+                # We can try to use a fallback or constant.
+                sizes = 100
 
                 # Plot all shots
-                pitch.scatter(shots.x, shots.y, ax=ax2, color='blue', edgecolors='white', s=sizes, alpha=0.7, label='Shot')
+                pitch.scatter(shots.start_x, shots.start_y, ax=ax2, color='blue', edgecolors='white', s=sizes, alpha=0.7, label='Shot')
                 # Plot goals
-                pitch.scatter(goals.x, goals.y, ax=ax2, color='green', edgecolors='gold', s=sizes if isinstance(sizes, int) else 200, marker='*', label='Goal')
+                pitch.scatter(goals.start_x, goals.start_y, ax=ax2, color='green', edgecolors='gold', s=200, marker='*', label='Goal')
 
                 ax2.legend(facecolor='#222222', edgecolor='None', labelcolor='white')
                 st.pyplot(fig2)

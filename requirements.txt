@@ -9,3 +9,4 @@ seaborn
 gdown
 requests
 altair
+socceraction
