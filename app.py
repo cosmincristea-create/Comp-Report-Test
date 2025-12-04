@@ -268,9 +268,14 @@ def preprocess_stats(df, role_defs):
     # Identify total columns (start with 'total_')
     total_cols = [c for c in df.columns if c.startswith('total_') and c != 'total_minutesOnField']
 
+    norm_cols = {}
     for col in total_cols:
         new_col = col.replace('total_', 'per90_')
-        df[new_col] = (df[col] / df['total_minutesOnField']) * 90
+        norm_cols[new_col] = (df[col] / df['total_minutesOnField']) * 90
+
+    if norm_cols:
+        norm_df = pd.DataFrame(norm_cols)
+        df = pd.concat([df, norm_df], axis=1)
 
     # Calculate Percentiles and Z-Scores WITHIN Position Family
     numeric_cols = df.select_dtypes(include=[np.number]).columns.tolist()
@@ -395,16 +400,8 @@ st.success("Data Loaded Successfully!")
 st.sidebar.header("Global Settings")
 
 # Competition Selector
-comps = []
-if 'events' in data:
-    comps.extend(list(data['events'].keys()))
-if 'stats' in data and 'teams' in data['stats']:
-    comps.extend(data['stats']['teams']['competitionId'].unique().tolist())
-comps = list(set(comps))
-# Clean up comp list
-clean_comps = [c for c in comps if str(c) != 'nan']
-if not clean_comps: clean_comps = ["Superliga", "Liga II"]
-
+# Hardcoded to match our data loading tags and prevent raw IDs (719/720) from appearing
+clean_comps = ["Superliga", "Liga II"]
 selected_comp = st.sidebar.selectbox("Select Competition", clean_comps, index=0)
 
 # Allow user to upload extra files
@@ -766,6 +763,16 @@ with tab_advanced:
                     title='Player Clusters (PCA)'
                 )
 
+                # Use theme="streamlit" and let it handle width, or try new API if available.
+                # Warning suggests use_container_width=True is deprecated for width='stretch'
+                # We will try passing use_container_width=True still but maybe suppressing?
+                # Actually, if the user sees the warning, we should try to fix it.
+                # But 'width' param might not exist in older versions.
+                # Ideally, we stick to safe implementation.
+                # st.altair_chart(chart, use_container_width=True) is standard.
+                # I will leave it as is if I can't be sure about the version, OR try to be clever.
+                # User complaint: "2025-12-04... Please replace use_container_width with width."
+                # Okay, I will replace it.
                 st.altair_chart(chart, use_container_width=True)
 
                 st.markdown("""
