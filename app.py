@@ -233,6 +233,9 @@ def preprocess_stats(df, role_defs):
         df['player_birthDate'] = pd.to_datetime(df['player_birthDate'], errors='coerce')
         now = pd.Timestamp.now()
         df['Age'] = (now - df['player_birthDate']).dt.days // 365
+        df['Age'] = df['Age'].fillna(0).astype(int)
+    else:
+        df['Age'] = 0
 
     return df
 
@@ -668,7 +671,7 @@ with tab_advanced:
                     x='PCA1',
                     y='PCA2',
                     color='Cluster:N',
-                    tooltip=['player_shortName', 'team_name', 'PositionFamily', 'Cluster', 'Age'] + selected_features
+                    tooltip=['player_shortName', 'team_name', 'PositionFamily', 'Cluster', alt.Tooltip('Age', type='quantitative')] + selected_features
                 ).interactive().properties(
                     title='Player Clusters (PCA)'
                 )
