@@ -7,6 +7,7 @@ import json
 from mplsoccer import Pitch, PyPizza, VerticalPitch
 import matplotlib.pyplot as plt
 import seaborn as sns
+import altair as alt
 from sklearn.preprocessing import StandardScaler
 from sklearn.decomposition import PCA
 from sklearn.cluster import KMeans
@@ -69,6 +70,7 @@ def normalize_event_columns(df):
         'teamId': ['team.id', 'team_id', 'team', 'teams_wyId'],
         'playerId': ['player.id', 'player_id', 'player', 'player_wyId'],
         'matchId': ['match.id', 'match_id', 'match'],
+        'subEventName': ['event_secondary_type', 'sub_event', 'subEvent', 'sub_event_name'],
         'x': ['location.x', 'pos_x', 'start_x', 'x_start', 'positions_0_x'],
         'y': ['location.y', 'pos_y', 'start_y', 'y_start', 'positions_0_y'],
         'end_x': ['pass.endLocation.x', 'end_location.x', 'end_x', 'positions_1_x'],
@@ -191,30 +193,46 @@ def preprocess_stats(df, role_defs):
     # Calculate Percentiles and Z-Scores WITHIN Position Family
     numeric_cols = df.select_dtypes(include=[np.number]).columns.tolist()
 
-    # Initialize columns
-    for col in numeric_cols:
-        df[f'pct_{col}'] = np.nan
-        df[f'z_{col}'] = np.nan
+    # Use lists to collect new columns to avoid fragmentation
+    new_cols = {}
 
+    # Pre-calculate for each family
     for family in df['PositionFamily'].unique():
         if family == 'Unknown': continue
 
         family_mask = df['PositionFamily'] == family
         subset = df.loc[family_mask, numeric_cols]
 
-        # Percentiles (RankPct)
         for col in numeric_cols:
-            # Handle cases where all values are 0 (e.g. GK stats for Strikers)
+            pct_col_name = f'pct_{col}'
+            z_col_name = f'z_{col}'
+
+            if pct_col_name not in new_cols:
+                new_cols[pct_col_name] = pd.Series(index=df.index, dtype='float64')
+            if z_col_name not in new_cols:
+                new_cols[z_col_name] = pd.Series(index=df.index, dtype='float64')
+
+            # Handle cases where all values are 0
             if subset[col].abs().sum() == 0:
-                df.loc[family_mask, f'pct_{col}'] = 0
-                df.loc[family_mask, f'z_{col}'] = 0
+                new_cols[pct_col_name].loc[family_mask] = 0
+                new_cols[z_col_name].loc[family_mask] = 0
             else:
-                df.loc[family_mask, f'pct_{col}'] = subset[col].rank(pct=True) * 100
-                # Z-Score
+                new_cols[pct_col_name].loc[family_mask] = subset[col].rank(pct=True) * 100
                 if subset[col].std() > 0:
-                     df.loc[family_mask, f'z_{col}'] = (subset[col] - subset[col].mean()) / subset[col].std()
+                     new_cols[z_col_name].loc[family_mask] = (subset[col] - subset[col].mean()) / subset[col].std()
                 else:
-                     df.loc[family_mask, f'z_{col}'] = 0
+                     new_cols[z_col_name].loc[family_mask] = 0
+
+    # Concatenate all new columns at once
+    if new_cols:
+        new_cols_df = pd.DataFrame(new_cols)
+        df = pd.concat([df, new_cols_df], axis=1)
+
+    # Calculate Age if birth date is present
+    if 'player_birthDate' in df.columns:
+        df['player_birthDate'] = pd.to_datetime(df['player_birthDate'], errors='coerce')
+        now = pd.Timestamp.now()
+        df['Age'] = (now - df['player_birthDate']).dt.days // 365
 
     return df
 
@@ -645,22 +663,32 @@ with tab_advanced:
                 cluster_data['PCA2'] = pca_res[:, 1]
                 cluster_data['Cluster'] = clusters
 
-                # Use Seaborn/Matplotlib
-                fig_c, ax_c = plt.subplots(figsize=(10, 6))
-                sns.scatterplot(data=cluster_data, x='PCA1', y='PCA2', hue='Cluster', palette='viridis', ax=ax_c, s=100)
+                # Use Altair for interactive scatter plot with tooltips
+                chart = alt.Chart(cluster_data).mark_circle(size=60).encode(
+                    x='PCA1',
+                    y='PCA2',
+                    color='Cluster:N',
+                    tooltip=['player_shortName', 'team_name', 'PositionFamily', 'Cluster', 'Age'] + selected_features
+                ).interactive().properties(
+                    title='Player Clusters (PCA)'
+                )
 
-                # Annotate some players? Or just hover (Streamlit native scatter might be better for hover)
-                # Let's use st.scatter_chart or Altair?
-                # Or just simple maplotlib with some labels for top players
+                st.altair_chart(chart, use_container_width=True)
 
-                # Let's use st.scatter_chart (simple) or custom Altair for hover
-                # Or Plotly if installed? No plotly in plan.
-                # Just Matplotlib is fine.
+                st.markdown("""
+                **Understanding K-Means Clustering:**
 
-                st.pyplot(fig_c)
+                K-Means groups similar players together based on the selected statistics.
+                1. **StandardScaler**: Scales data so all metrics have equal weight (mean=0, std=1).
+                2. **PCA (Principal Component Analysis)**: Reduces the many selected metrics into 2 main "Components" (PCA1 and PCA2) that explain the most variance, allowing us to plot them on a 2D graph.
+                3. **K-Means**: Finds 'k' centers and assigns every player to the nearest center.
 
-                st.write("Cluster Members:")
-                st.dataframe(cluster_data[['player_shortName', 'team_name', 'Cluster'] + selected_features])
+                **Cluster Summary (Average Values):**
+                """)
+
+                # Summary Table
+                summary = cluster_data.groupby('Cluster')[selected_features].mean()
+                st.dataframe(summary.style.highlight_max(axis=0, color='lightgreen'))
 
             else:
                 st.warning("Select at least 2 features.")
@@ -724,27 +752,39 @@ with tab_team:
         team_b = st.selectbox("Select Team B (Comparison)", ["None"] + list(available_teams))
 
         # Match Selector (Requires Event Data)
-        match_options = []
+        match_options = {}
         if selected_comp in data['events']:
             events_df = data['events'][selected_comp]
             # Filter for Team A events
-            # Need to map Team Name to Team ID or just use team name if available
-            # Event data usually uses teamId. We need a mapping.
-            # We can create a mapping from team_df
-
-            # Create mapping: team_name -> teamId
             if not team_df.empty:
-                # Get the row for Team A
                 team_info = team_df[(team_df['team_name'] == team_a) & (team_df['Competition'] == selected_comp)]
                 if not team_info.empty:
                     team_a_id = team_info.iloc[0]['teamId']
 
-                    # Filter events
-                    team_events = events_df[events_df['teamId'] == team_a_id]
-                    match_ids = team_events['matchId'].unique()
-                    match_options = sorted(match_ids)
+                    # Filter events for this team to get match IDs
+                    team_matches = events_df[events_df['teamId'] == team_a_id]['matchId'].unique()
 
-        selected_match = st.selectbox("Select Match (ID)", ["All"] + list(match_options))
+                    # For each match, find the opponent
+                    for m_id in team_matches:
+                        # Get all events for this match
+                        m_events = events_df[events_df['matchId'] == m_id]
+                        # Find unique teams in this match
+                        teams_in_match = m_events['teamId'].unique()
+                        # Opponent is the one that is NOT team_a_id
+                        opp_id = next((t for t in teams_in_match if t != team_a_id), None)
+
+                        label = f"Match {m_id}"
+                        if opp_id:
+                            # Find opponent name
+                            opp_row = team_df[team_df['teamId'] == opp_id]
+                            if not opp_row.empty:
+                                opp_name = opp_row.iloc[0]['team_name']
+                                label = f"vs {opp_name} ({m_id})"
+
+                        match_options[label] = m_id
+
+        selected_match_label = st.selectbox("Select Match", ["All"] + list(match_options.keys()))
+        selected_match = match_options[selected_match_label] if selected_match_label != "All" else "All"
 
         # Comparison Table
         if team_b != "None" and not team_df.empty:
