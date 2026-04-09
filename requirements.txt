@@ -1,0 +1,12 @@
+streamlit
+pandas
+numpy
+scipy
+scikit-learn
+mplsoccer
+matplotlib
+seaborn
+gdown
+requests
+altair
+socceraction
